@@ -1,0 +1,47 @@
+# CarbonNexus configuration. Values marked [paper] come from the ISPRS manuscript;
+# values marked [assumed] are NOT specified there and are my own documented choices.
+
+[study]
+start = "2019-01"          # [paper] 1 Jan 2019
+end   = "2024-12"          # [paper] 31 Dec 2024
+# [paper] 190 lat bins x 240 lon bins at 0.05 deg. The exact bbox is not given [assumed]:
+west  = -124.5
+north = 42.0
+res   = 0.05
+height = 190
+width  = 240
+
+[preprocess]
+qa_no2 = 0.75              # [paper] qa_value > 0.75
+qa_other = 0.5             # [paper] CH4 qa_value > 0.5 (also applied to SO2/CO here [assumed])
+mad_k = 4.0                # [paper] Eq. 1
+kalman_q = 1e-4            # [paper] Eq. 3
+kalman_r = 1e-2            # [paper] Eq. 4
+kalman_max_gap = 6         # [assumed] longer gaps stay NaN instead of a manufactured trend
+savgol_window = 5          # [assumed] paper gives no window
+savgol_order = 2           # [assumed]
+min_valid_fraction = 0.5   # validation gate: min fraction of in-state cells with data per channel-month [assumed]
+
+[cei]
+# [paper] Eq. 8 weights
+w_no2 = 0.30
+w_co  = 0.20
+w_ch4 = 0.35
+w_so2 = 0.15
+# [paper] CH4 GWP-100 = 28. GWP for NO2/CO/SO2 is NOT given; they are proxies,
+# so 1.0 is assumed. See docs/methodology.md for the consequence of this.
+gwp_ch4 = 28.0
+gwp_no2 = 1.0
+gwp_co  = 1.0
+gwp_so2 = 1.0
+
+[hotspots]
+n_classes = 4              # [paper] Low / Moderate / High / Very High
+label_mode = "per_month"   # [paper text]; "mean" reproduces the paper's Fig. 5 code (time-mean CEI)
+random_state = 42          # [paper]
+min_component_cells = 3    # [assumed] ignore isolated 1-2 cell blobs when listing hotspots
+
+[forecast]
+horizon = 12               # [paper] T_out
+input_months = 24          # [paper] T_in
+holdout_months = 12        # [paper] 2024 temporal holdout

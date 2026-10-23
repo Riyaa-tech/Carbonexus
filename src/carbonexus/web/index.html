@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CarbonNexus MVP</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/vendor/leaflet.css">
+<style>
+:root{--bg:#f6f7f5;--panel:#fff;--ink:#1d2421;--mute:#5d6862;--line:#dfe3df;--accent:#1f6f54;
+--c0:#5aa469;--c1:#f2c14e;--c2:#e8743b;--c3:#b3202a;--warn:#7a1f1f;--warnbg:#fde8e6}
+@media (prefers-color-scheme:dark){:root{--bg:#141816;--panel:#1d2320;--ink:#e8ede9;--mute:#9aa8a0;--line:#2e3732;--accent:#59c29a;--warnbg:#3a1c1c;--warn:#ffb4ab}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+header{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+h1{font-size:18px;margin:0}h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin:0 0 8px}
+#banner{display:none;padding:8px 16px;background:var(--warnbg);color:var(--warn);font-weight:600}
+main{display:grid;grid-template-columns:300px minmax(0,1fr) 400px;gap:12px;padding:12px;height:calc(100vh - 62px)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto}
+#map{height:100%;min-height:420px;border-radius:8px;border:1px solid var(--line)}
+.mapwrap{position:relative;min-height:0}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line)}
+tr.sel{background:color-mix(in srgb,var(--accent) 15%,transparent)}tbody tr{cursor:pointer}
+.chip{display:inline-block;padding:1px 8px;border-radius:10px;color:#fff;font-size:12px;white-space:nowrap}
+.k0{background:var(--c0)}.k1{background:var(--c1);color:#222}.k2{background:var(--c2)}.k3{background:var(--c3)}.kn{background:#888}
+label{display:block;margin:8px 0 2px;color:var(--mute);font-size:12px}input[type=range]{width:100%}
+select,button{font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.tabs button{border-radius:6px 6px 0 0;border-bottom:none}.tabs button.on{background:var(--accent);color:#fff}
+.bar{display:flex;align-items:center;gap:6px;margin:4px 0}.bar span.n{width:36px}.bar i{display:block;height:12px;background:var(--accent);border-radius:3px}
+.note{color:var(--mute);font-size:12px}.legend span{margin-right:8px}
+.hs{padding:6px;border:1px solid var(--line);border-radius:6px;margin-bottom:6px;cursor:pointer}
+#setup{display:none;padding:24px;max-width:720px}code,pre{background:color-mix(in srgb,var(--mute) 15%,transparent);padding:1px 4px;border-radius:4px}
+@media (max-width:1100px){main{grid-template-columns:1fr;height:auto}#map{height:480px}}
+</style>
+</head>
+<body>
+<header><h1>CarbonNexus MVP</h1><span class="note" id="meta"></span></header>
+<div id="banner"></div>
+<div id="setup" class="panel">
+  <h2>No analysis found</h2>
+  <p id="setupmsg"></p>
+  <p>Fetch real data and run the pipeline (see <code>README.md</code>):</p>
+  <pre>carbonexus fetch &amp;&amp; carbonexus fetch-firms &amp;&amp; carbonexus run</pre>
+</div>
+<main id="app" style="display:none">
+  <section class="panel">
+    <h2>Controls</h2>
+    <label for="month">Month: <b id="monthlbl"></b></label>
+    <input id="month" type="range" min="0" max="0" value="0">
+    <label for="layer">Map layer</label>
+    <select id="layer"><option value="class">Hotspot class</option><option value="cei">CEI (continuous)</option></select>
+    <div class="legend note" style="margin-top:8px"><span><i class="chip k0">Low</i></span><span><i class="chip k1">Moderate</i></span><span><i class="chip k2">High</i></span><span><i class="chip k3">Very High</i></span></div>
+    <p class="note" id="thr"></p>
+    <h2 style="margin-top:14px">Regions</h2>
+    <table id="regtable"><thead><tr><th>Region</th><th>CEI</th><th>Class</th></tr></thead><tbody></tbody></table>
+    <p class="note">Class = region-mean CEI placed on the month's K-means thresholds. Regions are approximate boxes.</p>
+  </section>
+  <section class="mapwrap"><div id="map"></div></section>
+  <section class="panel">
+    <div class="tabs"><button data-t="trend" class="on">Trend</button><button data-t="fc">Forecast</button><button data-t="hs">Hotspots</button><button data-t="ex">Why?</button><button data-t="val">Data</button></div>
+    <div id="tab-trend"><h2 style="margin-top:10px" id="trendttl">Historical CEI</h2><canvas id="trend" height="220"></canvas><div id="regstats" class="note"></div></div>
+    <div id="tab-fc" style="display:none"><h2 style="margin-top:10px">Forecast</h2>
+      <label for="fcmodel">Model</label><select id="fcmodel"><option value="baseline">Baseline (seasonal-trend OLS)</option></select>
+      <label for="fch">Horizon (months)</label><select id="fch"><option>6</option><option selected>12</option><option>36</option><option>60</option></select>
+      <canvas id="fc" height="220"></canvas><div id="fcnote" class="note"></div><div id="fcbt" class="note"></div></div>
+    <div id="tab-hs" style="display:none"><h2 style="margin-top:10px">Detected hotspots (High / Very High)</h2><div id="hslist"></div></div>
+    <div id="tab-ex" style="display:none"><h2 style="margin-top:10px" id="exttl">Contributing factors</h2><div id="exbody" class="note">Select a region, click the map, or pick a hotspot.</div></div>
+    <div id="tab-val" style="display:none"><h2 style="margin-top:10px">Data validation</h2><div id="valbody"></div></div>
+  </section>
+</main>
+<script src="/static/vendor/leaflet.js"></script>
+<script src="/static/vendor/chart.umd.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
