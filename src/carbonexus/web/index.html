@@ -11,29 +11,27 @@
 <body>
 <div class="shell">
   <aside class="side">
-    <div class="brand">
+    <div class="brand" title="CarbonNexus – climate intelligence">
       <div class="brand-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#bfe3cf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 5-14 15-14 0 10-6 15-14 15"/><path d="M5 19c3-5 6-8 10-10"/></svg></div>
-      <div><div class="brand-name">CarbonNexus</div><div class="brand-sub">Climate intelligence</div></div>
+      <div class="brand-name">CarbonNexus</div>
     </div>
     <nav class="nav tabs" role="tablist" aria-label="Analysis views">
-      <button role="tab" data-t="trend" class="on" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 8-10"/><path d="M3 21h18"/></svg>Trend</button>
-      <button role="tab" data-t="fc" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 3 4-6"/><path d="M16 9l5 0M18 12h3M20 15h1" stroke-dasharray="1 2"/></svg>Forecast</button>
-      <button role="tab" data-t="hs" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg>Hotspots</button>
-      <button role="tab" data-t="ex" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.4 1 2.5h6c0-1.1.3-1.8 1-2.5A6 6 0 0012 3z"/></svg>Why?</button>
-      <button role="tab" data-t="val" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5L16 9.5"/></svg>Data</button>
+      <button role="tab" data-t="trend" class="on" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 8-10"/><path d="M3 21h18"/></svg><span>Trend</span></button>
+      <button role="tab" data-t="fc" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 3 4-6"/><path d="M16 9l5 0M18 12h3M20 15h1" stroke-dasharray="1 2"/></svg><span>Forecast</span></button>
+      <button role="tab" data-t="hs" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg><span>Hotspots</span></button>
+      <button role="tab" data-t="ex" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.4 1 2.5h6c0-1.1.3-1.8 1-2.5A6 6 0 0012 3z"/></svg><span>Why?</span></button>
+      <button role="tab" data-t="val" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5L16 9.5"/></svg><span>Data</span></button>
     </nav>
-    <div class="side-foot">Research prototype. Hotspot classes are relative to each month's distribution.</div>
   </aside>
 
   <div class="main">
     <header class="top">
-      <div>
+      <div class="titles">
         <h1>California emission hotspots</h1>
         <div class="sub" id="meta">Loading…</div>
       </div>
       <div class="chips" id="chips"></div>
     </header>
-    <div id="banner" role="alert"></div>
 
     <div id="setup" class="card">
       <h2>No analysis found</h2>
@@ -45,10 +43,10 @@
     <div id="app" hidden>
       <div class="kpis" id="kpis" aria-label="Summary for the selected month"></div>
 
-      <div class="workspace" style="margin-top:16px">
-        <section class="card mapcard" aria-label="Emission map">
+      <div class="workspace">
+        <section class="card mapcard" aria-label="Emission heat map">
           <div class="maptools">
-            <span class="title">Emission map</span>
+            <span class="title">Carbon emission heat map</span>
             <div class="ctl">
               <button class="btn" id="prev" aria-label="Previous month">‹</button>
               <label for="month" class="sr">Month</label>
@@ -60,51 +58,53 @@
               <select id="layer"><option value="class">Hotspot class</option><option value="cei">CEI (continuous)</option></select></div>
           </div>
           <div class="mapbox">
-            <div id="map" role="application" aria-label="Interactive map; click a region or cell for an explanation"></div>
+            <div id="map" role="application" aria-label="Interactive map; hover for cell values, click a region or cell for an explanation"></div>
             <div class="legend" id="legend"></div>
+            <div class="readout" id="readout" aria-live="off"></div>
           </div>
-          <p class="note" id="thr" style="padding:6px 16px;margin:0;border-top:1px solid var(--line)"></p>
+          <p class="note mapfoot" id="thr"></p>
         </section>
 
-        <section class="card analysis" aria-label="Analysis">
-          <div class="panes">
-            <div class="pane" id="tab-trend" role="tabpanel">
-              <h3 id="trendttl">Historical CEI</h3>
-              <div class="note">Region-mean Carbon Emission Index; marker = selected month</div>
-              <div class="chartbox"><canvas id="trend" role="img" aria-label="Historical CEI chart"></canvas></div>
-              <div id="regstats"></div>
-            </div>
-            <div class="pane" id="tab-fc" role="tabpanel" hidden>
-              <h3>Forecast scenario</h3>
-              <div class="fields">
-                <div class="field"><label for="fcmodel">Model</label><select id="fcmodel"><option value="baseline">Baseline (seasonal-trend OLS)</option></select></div>
-                <div class="field"><label for="fch">Horizon (months)</label><select id="fch"><option>6</option><option selected>12</option><option>36</option><option>60</option></select></div>
+        <div class="rightcol">
+          <section class="card analysis" aria-label="Analysis">
+            <div class="panes">
+              <div class="pane flexcol" id="tab-trend" role="tabpanel">
+                <div class="phead"><h3 id="trendttl">Historical CEI</h3><span class="note">Region-mean CEI by month · ● selected month</span></div>
+                <div class="chartbox"><canvas id="trend" role="img" aria-label="Historical CEI chart"></canvas></div>
+                <div id="regstats"></div>
               </div>
-              <div class="chartbox"><canvas id="fc" role="img" aria-label="Forecast chart"></canvas></div>
-              <div id="fcnote"></div>
-              <div id="fcbt"></div>
+              <div class="pane" id="tab-fc" role="tabpanel" hidden>
+                <h3>Forecast scenario</h3>
+                <div class="fields">
+                  <div class="field"><label for="fcmodel">Model</label><select id="fcmodel"><option value="baseline">Baseline (seasonal-trend OLS)</option></select></div>
+                  <div class="field"><label for="fch">Horizon (months)</label><select id="fch"><option>6</option><option selected>12</option><option>36</option><option>60</option></select></div>
+                </div>
+                <div class="chartbox fixed"><canvas id="fc" role="img" aria-label="Forecast chart"></canvas></div>
+                <div id="fcnote"></div>
+                <div id="fcbt"></div>
+              </div>
+              <div class="pane" id="tab-hs" role="tabpanel" hidden>
+                <h3>Detected hotspots</h3>
+                <div class="note" style="margin-bottom:8px">Connected High / Very High cell clusters for the selected month</div>
+                <div id="hslist"></div>
+              </div>
+              <div class="pane" id="tab-ex" role="tabpanel" hidden>
+                <h3 id="exttl">Contributing factors</h3>
+                <div id="exbody" class="note">Select a region, click the map, or pick a hotspot.</div>
+              </div>
+              <div class="pane" id="tab-val" role="tabpanel" hidden>
+                <h3>Data validation</h3>
+                <div id="valbody"></div>
+              </div>
             </div>
-            <div class="pane" id="tab-hs" role="tabpanel" hidden>
-              <h3>Detected hotspots</h3>
-              <div class="note" style="margin-bottom:8px">Connected High / Very High cell clusters for the selected month</div>
-              <div id="hslist"></div>
-            </div>
-            <div class="pane" id="tab-ex" role="tabpanel" hidden>
-              <h3 id="exttl">Contributing factors</h3>
-              <div id="exbody" class="note">Select a region, click the map, or pick a hotspot.</div>
-            </div>
-            <div class="pane" id="tab-val" role="tabpanel" hidden>
-              <h3>Data validation</h3>
-              <div id="valbody"></div>
-            </div>
-          </div>
-        </section>
-      </div>
+          </section>
 
-      <section class="card" style="margin-top:16px">
-        <div class="card-head"><h2 style="margin:0">Regions</h2><span class="note">Class = region-mean CEI on the month's K-means boundaries. Regions are approximate boxes.</span></div>
-        <div class="scroll-x"><table id="regtable" class="regions"><thead><tr><th>Region</th><th class="num">CEI</th><th>Class</th><th class="num">Trend / yr</th><th class="num">Months Very High</th><th class="num">Cells</th></tr></thead><tbody></tbody></table></div>
-      </section>
+          <section class="card regcard" aria-label="Regional CEI">
+            <div class="card-head"><h2>Regional CEI</h2><span class="note">Class = region-mean CEI on the month's boundaries · approximate boxes</span></div>
+            <div class="tablewrap"><table id="regtable" class="regions"><thead><tr><th>Region</th><th class="num">CEI</th><th>Class</th><th class="num">Trend/yr</th><th class="num">Mo. Very High</th><th class="num">Cells</th></tr></thead><tbody></tbody></table></div>
+          </section>
+        </div>
+      </div>
     </div>
   </div>
 </div>

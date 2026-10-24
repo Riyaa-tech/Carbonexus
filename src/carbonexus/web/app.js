@@ -18,17 +18,17 @@ async function init() {
   if (!st.ready) { $("#setup").style.display = "block"; $("#setupmsg").textContent = st.detail; $("#meta").textContent = "No analysis loaded"; return; }
   S.status = st; S.months = st.months; S.classes = st.class_names; S.bounds = st.bounds;
   $("#app").hidden = false;
-  const synthetic = /SYNTHETIC/i.test(st.provenance);
   $("#meta").textContent = `${st.months[0]} → ${st.months.at(-1)} · ${st.months.length} monthly composites · ${st.shape[1]}×${st.shape[0]} cells at 0.05° · class labels: ${st.label_mode.replace("_", " ")}`;
   $("#chips").innerHTML = `<span class="pill">Period <b>${esc(st.months[0])} – ${esc(st.months.at(-1))}</b></span>` +
-    `<span class="pill ${synthetic ? "bad" : ""}">Source <b>${esc(st.provenance)}</b></span>` +
+    `<span class="pill">Source <b>${esc(st.provenance)}</b></span>` +
     `<span class="pill ${st.validation_ok ? "ok" : "bad"}">Validation <b>${st.validation_ok ? "passed" : "problems – see Data"}</b></span>`;
-  if (synthetic) { const b = $("#banner"); b.style.display = "block"; b.textContent = "⚠ SYNTHETIC DEMO DATA – artificial values for software testing only. Not a measurement."; }
 
   const m = $("#month"); m.max = S.months.length - 1; m.value = S.months.length - 1; S.month = +m.value;
   const [w, s, e, n] = S.bounds;
   S.map = L.map("map").fitBounds([[s, w], [n, e]]);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© OpenStreetMap", opacity: .55, maxZoom: 12}).addTo(S.map);
+  S.map.on("mousemove", ev => readout(ev.latlng));
+  S.map.on("mouseout", () => { $("#readout").innerHTML = ""; });
   S.map.on("click", ev => explainQuery({lat: ev.latlng.lat, lon: ev.latlng.lng}));
   if (window.ResizeObserver) new ResizeObserver(() => S.map.invalidateSize()).observe($("#map"));
   window.addEventListener("resize", () => S.map.invalidateSize());
@@ -44,12 +44,14 @@ async function init() {
   S.regions.forEach(r => {
     const [rw, rs, re, rn] = r.box;
     S.regLayer[r.id] = L.rectangle([[rs, rw], [rn, re]], {color: css("--ink"), weight: 1, opacity: .45, fill: false, dashArray: "4 4"}).addTo(S.map)
-      .bindTooltip(esc(r.name), {sticky: true})
+      .bindTooltip(() => `${esc(r.name)} · CEI ${fmt(S.cur(r))}`, {sticky: true})
       .on("click", ev => { L.DomEvent.stopPropagation(ev); selectRegion(r.id); });
   });
   await ensureSeries();
   S.region = S.regions[0].id;
   await refresh();
+  S.map.invalidateSize();
+  const db = dataBounds(); if (db) S.map.fitBounds(db, {padding: [4, 4]});   // frame the classified cells, not the whole bbox
   await selectRegion(S.region, false);
 }
 
@@ -81,9 +83,13 @@ async function refresh() {
 }
 
 /* ---------- map ---------- */
+// Ordered sequential ramp (ColorBrewer YlOrRd). The class colours (--c0..--c3 in styles.css) are
+// four stops of this same ramp, so legend, chips, map and charts share one scale.
+const RAMP = ["#ffffcc", "#ffeda0", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026"];
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-const hsl = (h, s, l) => { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return [f(0), f(8), f(4)].map(v => Math.round(255 * v)); };
-const toRgb = c => c.startsWith("#") ? hex(c.length === 4 ? "#" + [...c.slice(1)].map(x => x + x).join("") : c) : (c.match(/\d+/g) || [128, 128, 128]).slice(0, 3).map(Number);
+const RAMP_RGB = RAMP.map(hex);
+const rampRgb = k => { k = Math.min(1, Math.max(0, k)); const x = k * (RAMP_RGB.length - 1), i = Math.min(Math.floor(x), RAMP_RGB.length - 2), f = x - i; return RAMP_RGB[i].map((v, j) => Math.round(v + (RAMP_RGB[i + 1][j] - v) * f)); };
+const CLASS_ALPHA = [125, 180, 225, 250];   // quieter background classes so hotspots stand out
 
 function drawGrid() {
   const g = S.grid, H = g.labels.length, W = g.labels[0].length, layer = $("#layer").value;
@@ -92,19 +98,17 @@ function drawGrid() {
   const flat = g.cei.flat().filter(v => v != null).sort((a, b) => a - b);
   const lo = flat[Math.floor(flat.length * .02)] ?? 0, hi = flat[Math.floor(flat.length * .98)] ?? 1;
   S.ramp = [lo, hi];
-  const pal = classColors().map(toRgb);
+  const pal = classColors().map(hex);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = 4 * (y * W + x), c = g.labels[y][x], v = g.cei[y][x];
-    let rgb = null;
-    if (layer === "class" && c >= 0) rgb = pal[c];
-    if (layer === "cei" && v != null) { const k = Math.min(1, Math.max(0, (v - lo) / (hi - lo || 1))); rgb = hsl(120 - 120 * k, 60, 60 - 20 * k); }
-    if (rgb) img.data.set([rgb[0], rgb[1], rgb[2], 205], i);
+    if (layer === "class" && c >= 0) img.data.set([...pal[c], CLASS_ALPHA[c]], i);
+    if (layer === "cei" && v != null) { const k = Math.min(1, Math.max(0, (v - lo) / (hi - lo || 1))); img.data.set([...rampRgb(k), Math.round(70 + 185 * k)], i); }
   }
   ctx.putImageData(img, 0, 0);
   const [w, s, e, n] = S.bounds;
   if (S.overlay) S.map.removeLayer(S.overlay);
-  S.overlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: .85}).addTo(S.map);
-  S.overlay.getElement().style.imageRendering = "pixelated";
+  S.overlay = L.imageOverlay(cv.toDataURL(), [[s, w], [n, e]], {opacity: 1}).addTo(S.map);
+  S.overlay.getElement().style.imageRendering = "pixelated";   // one data cell = one block; no interpolation
   drawLegend(layer);
 }
 
@@ -112,9 +116,27 @@ function drawLegend(layer) {
   const th = S.grid.thresholds, cols = classColors(), ok = th.every(v => v != null);
   const rng = ["< " + fmt(th[0]), `${fmt(th[0])} – ${fmt(th[1])}`, `${fmt(th[1])} – ${fmt(th[2])}`, "≥ " + fmt(th[2])];
   $("#legend").innerHTML = layer === "class"
-    ? `<div class="ttl">Hotspot class <span class="note">(CEI range)</span></div>` + S.classes.map((c, i) =>
+    ? `<div class="ttl">CEI class</div>` + S.classes.map((c, i) =>
         `<div class="row"><span class="sw" style="background:${cols[i]}"></span>${esc(c)}<span class="rng">${ok ? rng[i] : ""}</span></div>`).join("")
-    : `<div class="ttl">CEI (2nd–98th percentile)</div><div class="ramp"></div><div class="ends"><span>${fmt(S.ramp[0])}</span><span>${fmt(S.ramp[1])}</span></div>`;
+    : `<div class="ttl">CEI (2nd–98th pct)</div><div class="ramp" style="background:linear-gradient(90deg,${RAMP.join(",")})"></div><div class="ends"><span>${fmt(S.ramp[0])} low</span><span>high ${fmt(S.ramp[1])}</span></div>`;
+}
+
+function dataBounds() {
+  const g = S.grid, H = g.labels.length, W = g.labels[0].length;
+  let x0 = W, x1 = -1, y0 = H, y1 = -1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (g.labels[y][x] >= 0) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (x1 < 0) return null;
+  const [w, s, e, n] = S.bounds, dx = (e - w) / W, dy = (n - s) / H;
+  return [[n - (y1 + 1) * dy, w + x0 * dx], [n - y0 * dy, w + (x1 + 1) * dx]];
+}
+
+function readout(ll) {
+  const el = $("#readout"), g = S.grid; if (!g) return;
+  const [w, s, e, n] = S.bounds, H = g.labels.length, W = g.labels[0].length;
+  const x = Math.floor((ll.lng - w) / (e - w) * W), y = Math.floor((n - ll.lat) / (n - s) * H);
+  if (x < 0 || y < 0 || x >= W || y >= H) { el.innerHTML = ""; return; }
+  const c = g.labels[y][x], v = g.cei[y][x], pos = `${ll.lat.toFixed(2)}, ${ll.lng.toFixed(2)}`;
+  el.innerHTML = c < 0 || v == null ? `${pos} · no data` : `${pos} · CEI <b>${fmt(v)}</b> ${chip(c)}`;
 }
 
 /* ---------- KPIs (all derived from API responses) ---------- */
@@ -170,7 +192,7 @@ function chartOn(id, cfg) {
   cfg.options = Object.assign({responsive: true, maintainAspectRatio: false, animation: false, interaction: {mode: "index", intersect: false}}, cfg.options);
   S.charts[id] = new Chart($("#" + id), cfg);
 }
-const axes = () => ({x: {grid: {display: false}, ticks: {maxTicksLimit: 7, maxRotation: 0}}, y: {grid: {color: css("--line")}, ticks: {maxTicksLimit: 6}, border: {display: false}}});
+const axes = () => ({x: {grid: {display: false}, ticks: {maxTicksLimit: 7, maxRotation: 0}, title: {display: true, text: "Month", font: {size: 11}}}, y: {grid: {color: css("--line")}, ticks: {maxTicksLimit: 6}, border: {display: false}, title: {display: true, text: "CEI (index units)", font: {size: 11}}}});
 const tip = () => ({backgroundColor: css("--ink"), titleColor: css("--panel"), bodyColor: css("--panel"), padding: 8, cornerRadius: 6, callbacks: {label: c => c.parsed.y == null ? null : `${c.dataset.label}: ${(+c.parsed.y).toFixed(2)}`}});
 
 function drawTrend() {
@@ -188,7 +210,7 @@ function drawTrend() {
       <div class="stat"><div class="k">Mean CEI</div><div class="v">${fmt(r.mean_cei)}</div></div>
       <div class="stat"><div class="k">Trend per year</div><div class="v">${fmt(r.trend_cei_per_year)}</div></div>
       <div class="stat"><div class="k">Months classed Very High</div><div class="v">${esc(r.months_very_high)} / ${ser.months.length}</div></div></div>
-    <h2>Class mix of cells, latest month</h2>
+    <h2 class="mini">Class mix of cells, latest month</h2>
     <div class="mix" role="img" aria-label="class mix">${mix.map(([k, v], i) => `<i style="width:${100 * v}%;background:${cols[i]}" title="${esc(k)} ${(100 * v).toFixed(0)}%"></i>`).join("")}</div>
     <div class="mixlbl">${mix.map(([k, v], i) => `<span style="--dot:${cols[i]}">${esc(k)} ${(100 * v).toFixed(0)}%</span>`).join("")}</div>`;
 }
@@ -273,7 +295,7 @@ async function loadValidation() {
     const inv = v.inventory_validation
       ? Object.entries(v.inventory_validation).map(([src, d]) => `<h2 style="margin-top:10px">${esc(src.toUpperCase())}</h2><table>${Object.entries(d).map(([k, x]) => `<tr><td>${esc(k.replace(/_/g, " "))}</td><td class="num">${typeof x === "number" ? fmt(x, 3) : esc(x)}</td></tr>`).join("")}</table>`).join("")
       : "<div class='callout'>No EDGAR / CARB inventory cross-check was run (needs manual downloads; see docs).</div>";
-    el.innerHTML = `<div class="callout ${/SYNTHETIC/i.test(v.provenance) ? "warn" : ""}">Provenance: <b>${esc(v.provenance)}</b></div>
+    el.innerHTML = `<div class="callout">Provenance: <b>${esc(v.provenance)}</b></div>
       ${probs.length ? `<div class="error"><b>Problems</b><ul style="margin:4px 0 0 18px;padding:0">${probs.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>` : `<div class="callout">No validation problems flagged.</div>`}
       <h2 style="margin-top:12px">CEI weights (Eq. 8)</h2>
       <table><tr><th>Gas</th><th class="num">w<sub>g</sub></th><th class="num">GWP<sub>g</sub></th></tr>${wt}</table>
